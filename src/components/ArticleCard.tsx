@@ -1,11 +1,11 @@
 import { useState, useEffect } from 'react';
-import { ExternalLink, Share2, ChevronDown, ChevronUp, Clock } from 'lucide-react';
+import { Clock, Heart, Share2 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { Badge } from './ui/Badge';
-import { Button } from './ui/Button';
 import { Skeleton } from './ui/Skeleton';
-import { useArticlesStore } from '../lib/stores/articles';
-import { useSettingsStore } from '../lib/stores/settings';
+import { DefaultThumbnail } from './DefaultThumbnail';
+import { ArticleDialog } from './ArticleDialog';
+import { useEngagementStore } from '../lib/stores/engagement';
 import type { ProcessedArticle } from '../lib/types';
 
 interface ArticleCardProps {
@@ -34,173 +34,171 @@ function estimateReadTime(text: string): string {
   return `${Math.max(1, Math.ceil(words / 200))} min read`;
 }
 
+function ArticleImage({ article, className }: { article: ProcessedArticle; className?: string }) {
+  const [imgError, setImgError] = useState(false);
+
+  if (!article.imageUrl || imgError) {
+    return (
+      <DefaultThumbnail
+        className={cn('h-full w-full', className)}
+        topic={article.topics[0]}
+      />
+    );
+  }
+
+  return (
+    <img
+      src={article.imageUrl}
+      alt={article.headline}
+      className={cn('h-full w-full object-cover transition-transform duration-500 group-hover:scale-105', className)}
+      loading="lazy"
+      onError={() => setImgError(true)}
+    />
+  );
+}
+
 export function ArticleCard({ article, index = 0, variant = 'list' }: ArticleCardProps) {
-  const [isExpanded, setIsExpanded] = useState(false);
-  const [isExpanding, setIsExpanding] = useState(false);
+  const [dialogOpen, setDialogOpen] = useState(false);
   const [localArticle, setLocalArticle] = useState(article);
 
-  const expandArticle = useArticlesStore((s) => s.expandArticle);
-  const apiKey = useSettingsStore((s) => s.openaiApiKey);
+  const engagement = useEngagementStore((s) => s.engagements[article.urlHash]);
+  const likeCount = engagement?.likes ?? 0;
 
   useEffect(() => {
     setLocalArticle(article);
   }, [article]);
 
-  const handleExpand = async () => {
-    if (!isExpanded) {
-      setIsExpanded(true);
-      if (localArticle.source === 'guardian' && !localArticle.fullText) {
-        setIsExpanding(true);
-        try {
-          const enriched = await expandArticle(localArticle, apiKey);
-          setLocalArticle(enriched);
-        } catch {
-          // keep existing content
-        } finally {
-          setIsExpanding(false);
-        }
-      }
-    } else {
-      setIsExpanded(false);
-    }
-  };
-
-  const handleShare = () => {
-    const text = `*${localArticle.headline}*\n\n${localArticle.summary}\n\nRead more: ${localArticle.url}`;
-    if (navigator.share) {
-      navigator.share({ title: localArticle.headline, text: localArticle.summary, url: localArticle.url }).catch(() => {});
-    } else {
-      const whatsappUrl = `https://wa.me/?text=${encodeURIComponent(text)}`;
-      window.open(whatsappUrl, '_blank', 'noopener');
-    }
-  };
-
   const readTime = estimateReadTime(localArticle.summary + (localArticle.fullText ?? ''));
   const primaryTopic = localArticle.topics[0] ?? 'News';
 
+  const handleCardClick = () => {
+    setDialogOpen(true);
+  };
+
   if (variant === 'featured') {
     return (
-      <article
-        className="group overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-neutral-200 transition-shadow hover:shadow-lg animate-in fade-in duration-500"
-        style={{ animationDelay: `${index * 100}ms` }}
-      >
-        <div className="grid md:grid-cols-2">
-          {localArticle.imageUrl && (
-            <div className="relative aspect-[4/3] overflow-hidden bg-neutral-100 md:aspect-auto md:min-h-[320px]">
-              <img
-                src={localArticle.imageUrl}
-                alt={localArticle.headline}
-                className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
-                loading="lazy"
-                onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
-              />
+      <>
+        <article
+          className="group cursor-pointer overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-neutral-200 transition-shadow hover:shadow-lg animate-in fade-in duration-500"
+          style={{ animationDelay: `${index * 100}ms` }}
+          onClick={handleCardClick}
+        >
+          <div className="grid md:grid-cols-2 md:h-[300px]">
+            <div className="relative aspect-[4/3] overflow-hidden bg-neutral-100 md:aspect-auto md:h-full">
+              <ArticleImage article={localArticle} />
             </div>
-          )}
-          <div className="flex flex-col justify-center p-6 sm:p-8">
-            <div className="mb-3 flex items-center gap-2 text-sm text-neutral-500">
-              <span className="font-semibold text-neutral-900">{localArticle.sourceName}</span>
-              <span className="text-neutral-300">&middot;</span>
-              <span>{timeAgo(localArticle.publishedAt)}</span>
-            </div>
+            <div className="flex flex-col justify-center overflow-hidden p-6 sm:p-8">
+              <div className="mb-3 flex items-center gap-2 text-sm text-neutral-500">
+                <span className="font-semibold text-neutral-900">{localArticle.sourceName}</span>
+                <span className="text-neutral-300">&middot;</span>
+                <span>{timeAgo(localArticle.publishedAt)}</span>
+              </div>
 
-            <h3 className="mb-3 font-headline text-2xl font-bold leading-tight text-neutral-900 sm:text-3xl">
-              {localArticle.headline}
-            </h3>
+              <h3 className="mb-3 line-clamp-2 font-headline text-2xl font-bold leading-tight text-neutral-900 sm:text-3xl">
+                {localArticle.headline}
+              </h3>
 
-            <p className="mb-5 line-clamp-3 text-sm leading-relaxed text-neutral-600">
-              {localArticle.summary}
-            </p>
+              <p className="mb-5 line-clamp-3 text-sm leading-relaxed text-neutral-600">
+                {localArticle.summary}
+              </p>
 
-            <div className="flex items-center gap-3">
-              <span className="text-sm font-semibold text-brand">{primaryTopic}</span>
-              <span className="text-neutral-300">&middot;</span>
-              <span className="flex items-center text-sm text-neutral-500">
-                <Clock className="mr-1 h-3.5 w-3.5" />
-                {readTime}
-              </span>
-            </div>
-
-            <div className="mt-5 flex items-center gap-3">
-              <Button
-                variant="default"
-                size="sm"
-                onClick={() => window.open(localArticle.url, '_blank', 'noopener')}
-              >
-                Read article <ExternalLink className="ml-2 h-3.5 w-3.5" />
-              </Button>
-              <Button variant="ghost" size="icon" onClick={handleShare} aria-label="Share">
-                <Share2 className="h-4 w-4 text-neutral-500" />
-              </Button>
+              <div className="flex items-center gap-3">
+                <span className="text-sm font-semibold text-brand">{primaryTopic}</span>
+                <span className="text-neutral-300">&middot;</span>
+                <span className="flex items-center text-sm text-neutral-500">
+                  <Clock className="mr-1 h-3.5 w-3.5" />
+                  {readTime}
+                </span>
+                {likeCount > 0 && (
+                  <>
+                    <span className="text-neutral-300">&middot;</span>
+                    <span className="flex items-center text-sm text-neutral-500">
+                      <Heart className="mr-1 h-3.5 w-3.5 fill-brand/30 text-brand" />
+                      {likeCount}
+                    </span>
+                  </>
+                )}
+              </div>
             </div>
           </div>
-        </div>
-      </article>
+        </article>
+
+        <ArticleDialog
+          article={localArticle}
+          open={dialogOpen}
+          onClose={() => setDialogOpen(false)}
+        />
+      </>
     );
   }
 
   if (variant === 'grid') {
     return (
-      <article
-        className="group flex flex-col overflow-hidden rounded-xl bg-white shadow-sm ring-1 ring-neutral-200 transition-shadow hover:shadow-md animate-in fade-in slide-in-from-bottom-2 duration-500 fill-mode-both"
-        style={{ animationDelay: `${index * 80}ms` }}
-      >
-        {localArticle.imageUrl && (
+      <>
+        <article
+          className="group flex cursor-pointer flex-col overflow-hidden rounded-xl bg-white shadow-sm ring-1 ring-neutral-200 transition-shadow hover:shadow-md animate-in fade-in slide-in-from-bottom-2 duration-500 fill-mode-both"
+          style={{ animationDelay: `${index * 80}ms` }}
+          onClick={handleCardClick}
+        >
           <div className="relative aspect-video overflow-hidden bg-neutral-100">
-            <img
-              src={localArticle.imageUrl}
-              alt={localArticle.headline}
-              className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
-              loading="lazy"
-              onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
-            />
-          </div>
-        )}
-
-        <div className="flex flex-1 flex-col p-4">
-          <div className="mb-2 flex items-center gap-2 text-xs text-neutral-500">
-            <span className="font-semibold text-neutral-800">{localArticle.sourceName}</span>
-            <span className="text-neutral-300">&middot;</span>
-            <span>{timeAgo(localArticle.publishedAt)}</span>
+            <ArticleImage article={localArticle} />
           </div>
 
-          <h3 className="mb-2 line-clamp-2 font-headline text-base font-bold leading-snug text-neutral-900">
-            {localArticle.headline}
-          </h3>
+          <div className="flex flex-1 flex-col p-4">
+            <div className="mb-2 flex items-center gap-2 text-xs text-neutral-500">
+              <span className="font-semibold text-neutral-800">{localArticle.sourceName}</span>
+              <span className="text-neutral-300">&middot;</span>
+              <span>{timeAgo(localArticle.publishedAt)}</span>
+            </div>
 
-          <p className="mb-4 line-clamp-3 flex-1 text-sm leading-relaxed text-neutral-600">
-            {localArticle.summary}
-          </p>
+            <h3 className="mb-2 line-clamp-2 font-headline text-base font-bold leading-snug text-neutral-900">
+              {localArticle.headline}
+            </h3>
 
-          <div className="flex items-center justify-between border-t border-neutral-100 pt-3">
-            <span className="text-xs font-semibold text-brand">{primaryTopic}</span>
-            <span className="flex items-center text-xs text-neutral-400">
-              <Clock className="mr-1 h-3 w-3" />
-              {readTime}
-            </span>
+            <p className="mb-4 line-clamp-3 flex-1 text-sm leading-relaxed text-neutral-600">
+              {localArticle.summary}
+            </p>
+
+            <div className="flex items-center justify-between border-t border-neutral-100 pt-3">
+              <span className="text-xs font-semibold text-brand">{primaryTopic}</span>
+              <div className="flex items-center gap-2">
+                {likeCount > 0 && (
+                  <span className="flex items-center text-xs text-neutral-400">
+                    <Heart className="mr-0.5 h-3 w-3 fill-brand/30 text-brand" />
+                    {likeCount}
+                  </span>
+                )}
+                <span className="flex items-center text-xs text-neutral-400">
+                  <Clock className="mr-1 h-3 w-3" />
+                  {readTime}
+                </span>
+              </div>
+            </div>
           </div>
-        </div>
-      </article>
+        </article>
+
+        <ArticleDialog
+          article={localArticle}
+          open={dialogOpen}
+          onClose={() => setDialogOpen(false)}
+        />
+      </>
     );
   }
 
   return (
-    <article
-      className={cn(
-        'group relative flex flex-col overflow-hidden rounded-xl bg-white shadow-sm ring-1 ring-neutral-200 transition-all hover:shadow-md',
-        'animate-in fade-in slide-in-from-bottom-4 duration-500 fill-mode-both',
-      )}
-      style={{ animationDelay: `${index * 100}ms` }}
-      aria-label={`Article: ${localArticle.headline}`}
-    >
-      {localArticle.imageUrl && (
+    <>
+      <article
+        className={cn(
+          'group relative flex cursor-pointer flex-col overflow-hidden rounded-xl bg-white shadow-sm ring-1 ring-neutral-200 transition-all hover:shadow-md',
+          'animate-in fade-in slide-in-from-bottom-4 duration-500 fill-mode-both',
+        )}
+        style={{ animationDelay: `${index * 100}ms` }}
+        aria-label={`Article: ${localArticle.headline}`}
+        onClick={handleCardClick}
+      >
         <div className="relative aspect-video w-full overflow-hidden bg-neutral-100">
-          <img
-            src={localArticle.imageUrl}
-            alt={localArticle.headline}
-            className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
-            loading="lazy"
-            onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
-          />
+          <ArticleImage article={localArticle} />
           {localArticle.impactTag && (
             <div className="absolute left-4 top-4">
               <Badge variant="brand" className="shadow-sm backdrop-blur-md bg-brand/90">
@@ -209,96 +207,50 @@ export function ArticleCard({ article, index = 0, variant = 'list' }: ArticleCar
             </div>
           )}
         </div>
-      )}
 
-      <div className="flex flex-1 flex-col p-5">
-        <div className="mb-3 flex flex-wrap items-center gap-2 text-xs text-neutral-500">
-          <span className="font-medium text-neutral-900">{localArticle.sourceName}</span>
-          <span className="text-neutral-300">&middot;</span>
-          <span>{timeAgo(localArticle.publishedAt)}</span>
-          <span className="ml-auto flex items-center">
-            <Clock className="mr-1 h-3.5 w-3.5" />
-            {readTime}
-          </span>
-        </div>
-
-        <h3 className="font-headline text-xl font-bold leading-snug text-neutral-900">
-          {localArticle.headline}
-        </h3>
-
-        <p className="mt-2 text-sm leading-relaxed text-neutral-600">
-          {localArticle.summary}
-        </p>
-
-        <div className="mt-4 flex flex-wrap items-center gap-2">
-          {localArticle.topics.slice(0, 3).map((topic) => (
-            <Badge key={topic} variant="secondary" className="font-normal">
-              {topic}
-            </Badge>
-          ))}
-        </div>
-
-        <div
-          className={cn(
-            'grid transition-all duration-300 ease-in-out',
-            isExpanded ? 'grid-rows-[1fr] opacity-100 mt-5' : 'grid-rows-[0fr] opacity-0'
-          )}
-        >
-          <div className="overflow-hidden">
-            <div className="border-t border-neutral-100 pt-4">
-              <h4 className="mb-3 text-sm font-semibold text-neutral-900">Key Takeaways</h4>
-              {isExpanding ? (
-                <div className="space-y-2" role="status" aria-label="Loading takeaways">
-                  <Skeleton className="h-4 w-full" />
-                  <Skeleton className="h-4 w-5/6" />
-                  <Skeleton className="h-4 w-4/6" />
-                </div>
-              ) : (
-                <ul className="space-y-2 text-sm text-neutral-600">
-                  {localArticle.summaryPoints?.map((point, i) => (
-                    <li key={i} className="flex items-start">
-                      <span className="mr-2 mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-brand" />
-                      <span className="leading-relaxed">{point}</span>
-                    </li>
-                  ))}
-                </ul>
+        <div className="flex flex-1 flex-col p-5">
+          <div className="mb-3 flex flex-wrap items-center gap-2 text-xs text-neutral-500">
+            <span className="font-medium text-neutral-900">{localArticle.sourceName}</span>
+            <span className="text-neutral-300">&middot;</span>
+            <span>{timeAgo(localArticle.publishedAt)}</span>
+            <span className="ml-auto flex items-center gap-2">
+              {likeCount > 0 && (
+                <span className="flex items-center">
+                  <Heart className="mr-0.5 h-3.5 w-3.5 fill-brand/30 text-brand" />
+                  {likeCount}
+                </span>
               )}
+              <span className="flex items-center">
+                <Clock className="mr-1 h-3.5 w-3.5" />
+                {readTime}
+              </span>
+            </span>
+          </div>
 
-              <div className="mt-6 flex items-center gap-3">
-                <Button
-                  variant="default"
-                  className="min-h-[44px] flex-1"
-                  onClick={() => window.open(localArticle.url, '_blank', 'noopener')}
-                >
-                  Read original <ExternalLink className="ml-2 h-4 w-4" />
-                </Button>
-                <Button
-                  variant="outline"
-                  size="icon"
-                  className="min-h-[44px] min-w-[44px]"
-                  onClick={handleShare}
-                  aria-label="Share article"
-                >
-                  <Share2 className="h-4 w-4 text-brand" />
-                </Button>
-              </div>
-            </div>
+          <h3 className="font-headline text-xl font-bold leading-snug text-neutral-900">
+            {localArticle.headline}
+          </h3>
+
+          <p className="mt-2 text-sm leading-relaxed text-neutral-600">
+            {localArticle.summary}
+          </p>
+
+          <div className="mt-4 flex flex-wrap items-center gap-2">
+            {localArticle.topics.slice(0, 3).map((topic) => (
+              <Badge key={topic} variant="secondary" className="font-normal">
+                {topic}
+              </Badge>
+            ))}
           </div>
         </div>
+      </article>
 
-        <button
-          onClick={handleExpand}
-          className="mt-4 flex min-h-[44px] w-full items-center justify-center gap-1 rounded-md py-2 text-xs font-medium text-neutral-500 transition-colors hover:bg-neutral-50 hover:text-neutral-900"
-          aria-expanded={isExpanded}
-        >
-          {isExpanded ? (
-            <>Show less <ChevronUp className="h-4 w-4" /></>
-          ) : (
-            <>Read more <ChevronDown className="h-4 w-4" /></>
-          )}
-        </button>
-      </div>
-    </article>
+      <ArticleDialog
+        article={localArticle}
+        open={dialogOpen}
+        onClose={() => setDialogOpen(false)}
+      />
+    </>
   );
 }
 

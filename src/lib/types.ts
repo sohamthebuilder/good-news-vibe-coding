@@ -66,6 +66,7 @@ export interface CachedEntry {
 
 export interface Settings {
   openaiApiKey: string;
+  gnewsApiKey: string;
   allowNeutral: boolean;
   dailyCap: number;
   dailyUsage: number;

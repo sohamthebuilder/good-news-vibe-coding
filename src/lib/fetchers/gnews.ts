@@ -30,8 +30,8 @@ function buildQuery(filters: Filters): string {
   return parts.join(' AND ');
 }
 
-export async function fetchGNews(filters: Filters): Promise<RawArticle[]> {
-  const apiKey = import.meta.env.VITE_GNEWS_API_KEY;
+export async function fetchGNews(filters: Filters, gnewsApiKey?: string): Promise<RawArticle[]> {
+  const apiKey = gnewsApiKey || import.meta.env.VITE_GNEWS_API_KEY;
   if (!apiKey) return [];
 
   const params = new URLSearchParams({

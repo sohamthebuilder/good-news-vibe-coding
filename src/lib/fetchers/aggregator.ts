@@ -15,12 +15,13 @@ const SOURCE_PRIORITY: Record<string, number> = {
 
 export async function fetchAllArticles(
   filters: Filters,
+  gnewsApiKey?: string,
 ): Promise<RawArticle[]> {
   const rssPromises = RSS_FEEDS.map((feed) => fetchRssFeed(feed));
 
   const results = await Promise.allSettled([
     ...rssPromises,
-    fetchGNews(filters),
+    fetchGNews(filters, gnewsApiKey),
     fetchGuardianSearch(filters),
   ]);
 

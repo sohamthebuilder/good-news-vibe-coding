@@ -5,6 +5,7 @@ import type { FontSize } from '../types';
 
 interface SettingsState {
   openaiApiKey: string;
+  gnewsApiKey: string;
   allowNeutral: boolean;
   dailyCap: number;
   dailyUsage: number;
@@ -12,6 +13,7 @@ interface SettingsState {
   fontSize: FontSize;
 
   setApiKey: (key: string) => void;
+  setGnewsApiKey: (key: string) => void;
   toggleNeutral: () => void;
   setDailyCap: (cap: number) => void;
   incrementUsage: () => void;
@@ -27,6 +29,7 @@ export const useSettingsStore = create<SettingsState>()(
   persist(
     (set, get) => ({
       openaiApiKey: '',
+      gnewsApiKey: '',
       allowNeutral: true,
       dailyCap: DEFAULT_DAILY_CAP,
       dailyUsage: 0,
@@ -34,6 +37,8 @@ export const useSettingsStore = create<SettingsState>()(
       fontSize: 'medium',
 
       setApiKey: (key) => set({ openaiApiKey: key }),
+
+      setGnewsApiKey: (key) => set({ gnewsApiKey: key }),
 
       toggleNeutral: () => set((s) => ({ allowNeutral: !s.allowNeutral })),
 
@@ -55,6 +60,7 @@ export const useSettingsStore = create<SettingsState>()(
         sessionStorage.clear();
         set({
           openaiApiKey: '',
+          gnewsApiKey: '',
           allowNeutral: true,
           dailyCap: DEFAULT_DAILY_CAP,
           dailyUsage: 0,

@@ -30,7 +30,7 @@ export function FeedPage({ onOpenSettings }: FeedPageProps) {
     loadCachedArticles,
     applyFilters,
   } = useArticlesStore();
-  const { openaiApiKey, allowNeutral, dailyUsage, dailyCap, incrementUsage } = useSettingsStore();
+  const { openaiApiKey, gnewsApiKey, allowNeutral, dailyUsage, dailyCap, incrementUsage } = useSettingsStore();
   const { filters, reset: resetFilters } = useFiltersStore();
 
   const [moreStoriesCount, setMoreStoriesCount] = useState(MORE_STORIES_PAGE_SIZE);
@@ -39,6 +39,12 @@ export function FeedPage({ onOpenSettings }: FeedPageProps) {
 
   const hasCategory = filters.topics.length > 0;
   const selectedCategory = filters.topics[0] ?? null;
+
+  const locationLabel = filters.indiaCity
+    ?? filters.indiaDistrict
+    ?? filters.indiaState
+    ?? filters.country
+    ?? null;
 
   // Load cached articles from Supabase on first mount for fast initial render
   useEffect(() => {
@@ -52,24 +58,46 @@ export function FeedPage({ onOpenSettings }: FeedPageProps) {
   // Fetch fresh articles when API key is available
   useEffect(() => {
     if (openaiApiKey) {
-      fetchArticles(filters, openaiApiKey, allowNeutral, dailyUsage, dailyCap, incrementUsage);
+      fetchArticles(filters, openaiApiKey, allowNeutral, dailyUsage, dailyCap, incrementUsage, gnewsApiKey);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [openaiApiKey, allowNeutral]);
+  }, [openaiApiKey, allowNeutral, gnewsApiKey]);
 
-  // Apply filters locally (fast) when filters change, only if we have articles
+  // Apply filters locally (fast) when filters change, only if we have articles.
+  // If a location filter is set but yields zero results from the local pool,
+  // trigger a fresh fetch so the user sees a loading state → new articles.
   useEffect(() => {
-    if (articles.length > 0 || useArticlesStore.getState().allArticles.length > 0) {
-      applyFilters(filters);
-      setMoreStoriesCount(MORE_STORIES_PAGE_SIZE);
-      window.scrollTo({ top: 0, behavior: 'smooth' });
+    const hasArticles = articles.length > 0 || useArticlesStore.getState().allArticles.length > 0;
+    if (!hasArticles) return;
+
+    applyFilters(filters);
+    setMoreStoriesCount(MORE_STORIES_PAGE_SIZE);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+
+    const locationChanged = filters.country || filters.indiaState || filters.indiaCity;
+    const postFilterCount = useArticlesStore.getState().articles.length;
+
+    if (locationChanged && postFilterCount === 0 && openaiApiKey) {
+      fetchArticles(filters, openaiApiKey, allowNeutral, dailyUsage, dailyCap, incrementUsage, gnewsApiKey);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filters.topics, filters.sortOrder, filters.country, filters.indiaState, filters.indiaCity]);
+  }, [filters.topics, filters.sortOrder, filters.country, filters.indiaState, filters.indiaCity, filters.indiaDistrict]);
+
+  // Re-fetch when user explicitly saves filter preferences
+  useEffect(() => {
+    const handler = () => {
+      if (openaiApiKey) {
+        fetchArticles(filters, openaiApiKey, allowNeutral, dailyUsage, dailyCap, incrementUsage, gnewsApiKey);
+      }
+    };
+    window.addEventListener('goodnews:filters-saved', handler);
+    return () => window.removeEventListener('goodnews:filters-saved', handler);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [openaiApiKey, gnewsApiKey, allowNeutral]);
 
   const handleManualRefresh = () => {
     if (!openaiApiKey) return;
-    fetchArticles(filters, openaiApiKey, allowNeutral, dailyUsage, dailyCap, incrementUsage);
+    fetchArticles(filters, openaiApiKey, allowNeutral, dailyUsage, dailyCap, incrementUsage, gnewsApiKey);
   };
 
   // Infinite scroll for "More Stories"
@@ -120,12 +148,17 @@ export function FeedPage({ onOpenSettings }: FeedPageProps) {
     latestHashes.add(featured.urlHash);
     const afterLatest = remaining.filter((a) => !latestHashes.has(a.urlHash));
 
-    // Category sections
+    // Category sections — each article appears in at most one section
+    const usedInSections = new Set<string>();
     const categorySections: { topic: Topic; articles: ProcessedArticle[] }[] = [];
     for (const topic of TOPICS) {
-      const catArticles = afterLatest.filter((a) => a.topics.includes(topic));
+      const catArticles = afterLatest.filter(
+        (a) => a.topics.includes(topic) && !usedInSections.has(a.urlHash),
+      );
       if (catArticles.length > 0) {
-        categorySections.push({ topic, articles: catArticles.slice(0, 8) });
+        const picked = catArticles.slice(0, 8);
+        picked.forEach((a) => usedInSections.add(a.urlHash));
+        categorySections.push({ topic, articles: picked });
       }
     }
 
@@ -285,10 +318,27 @@ export function FeedPage({ onOpenSettings }: FeedPageProps) {
               </>
             )}
 
+            {/* Location-aware loading — fetching articles for a specific place */}
+            {articles.length === 0 && isLoading && locationLabel && (
+              <div className="space-y-10">
+                <div className="flex flex-col items-center justify-center py-8">
+                  <Loader2 className="mb-4 h-8 w-8 animate-spin text-brand" />
+                  <p className="text-sm text-neutral-500">
+                    Looking for good news in <span className="font-medium text-neutral-700">{locationLabel}</span>...
+                  </p>
+                </div>
+                <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
+                  {Array.from({ length: 4 }).map((_, i) => (
+                    <ArticleGridSkeleton key={i} />
+                  ))}
+                </div>
+              </div>
+            )}
+
             {/* No results */}
             {articles.length === 0 && !isLoading && !isFilterLoading && (
               <div className="py-12">
-                <NoResultsState onClear={resetFilters} />
+                <NoResultsState onClear={resetFilters} locationLabel={locationLabel} />
               </div>
             )}
 

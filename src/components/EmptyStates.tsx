@@ -1,9 +1,10 @@
 import type { ReactNode } from 'react';
-import { AlertCircle, KeyRound, SearchX, ShieldAlert } from 'lucide-react';
+import { AlertCircle, KeyRound, ShieldAlert } from 'lucide-react';
 import { Button } from './ui/Button';
 
 interface EmptyStateProps {
-  icon: ReactNode;
+  icon?: ReactNode;
+  gifUrl?: string;
   title: string;
   description: string;
   action?: {
@@ -12,15 +13,24 @@ interface EmptyStateProps {
   };
 }
 
-export function EmptyState({ icon, title, description, action }: EmptyStateProps) {
+export function EmptyState({ icon, gifUrl, title, description, action }: EmptyStateProps) {
   return (
     <div
       className="flex flex-col items-center justify-center rounded-xl border border-dashed border-neutral-200 bg-neutral-50 p-8 text-center"
       role="status"
     >
-      <div className="mb-4 rounded-full bg-white p-3 shadow-sm ring-1 ring-neutral-100" aria-hidden="true">
-        {icon}
-      </div>
+      {gifUrl ? (
+        <img
+          src={gifUrl}
+          alt=""
+          className="mb-6 h-40 w-40 rounded-xl object-cover"
+          aria-hidden="true"
+        />
+      ) : icon ? (
+        <div className="mb-4 rounded-full bg-white p-3 shadow-sm ring-1 ring-neutral-100" aria-hidden="true">
+          {icon}
+        </div>
+      ) : null}
       <h3 className="mb-2 font-headline text-xl font-semibold text-neutral-900">{title}</h3>
       <p className="mb-6 max-w-sm text-sm leading-relaxed text-neutral-500">{description}</p>
       {action && (
@@ -32,12 +42,16 @@ export function EmptyState({ icon, title, description, action }: EmptyStateProps
   );
 }
 
-export function NoResultsState({ onClear }: { onClear: () => void }) {
+export function NoResultsState({ onClear, locationLabel }: { onClear: () => void; locationLabel?: string | null }) {
+  const description = locationLabel
+    ? `We couldn't find any positive stories for "${locationLabel}" right now. Good news might be brewing — try again later or adjust your filters!`
+    : 'We couldn\'t find any positive stories matching your current filters. Try adjusting your topics or location.';
+
   return (
     <EmptyState
-      icon={<SearchX className="h-6 w-6 text-neutral-400" />}
-      title="No good news found"
-      description="We couldn't find any positive stories matching your current filters. Try adjusting your topics or location."
+      gifUrl="https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExcTd2NjR0YnZ3c2RiMTRtYmJhbGY2NTN3YnBhZHR1ZHhlODJrazE1YyZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/JmD9mkDmzvXE7nyu1V/giphy.gif"
+      title="No articles found"
+      description={description}
       action={{ label: 'Clear filters', onClick: onClear }}
     />
   );

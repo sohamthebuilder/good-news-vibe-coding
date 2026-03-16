@@ -64,7 +64,9 @@ export const useFiltersStore = create<FiltersState>()(
         })),
 
       saveFilterPreferences: () => {
-        // Persisted automatically via zustand persist middleware
+        window.dispatchEvent(new CustomEvent('goodnews:filters-saved', {
+          detail: get().filters,
+        }));
       },
 
       reset: () => set({ filters: defaultFilters }),

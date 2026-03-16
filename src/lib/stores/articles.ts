@@ -5,6 +5,7 @@ import { fetchAllArticles } from '../fetchers/aggregator';
 import { fetchGuardianFullText, fetchViaProxy } from '../fetchers/guardian';
 import { classifyAndSummarize } from '../ai/openai';
 import { TIER1_SOURCES } from '../constants';
+import { useEngagementStore } from './engagement';
 import type { Filters, ProcessedArticle, SortOrder, Topic } from '../types';
 
 function sortArticles(
@@ -21,13 +22,17 @@ function sortArticles(
           new Date(a.publishedAt).getTime(),
       );
       break;
-    case 'popular':
+    case 'popular': {
+      const engagements = useEngagementStore.getState().engagements;
       sorted.sort((a, b) => {
-        const aScore = a.impactTag ? 1 : 0;
-        const bScore = b.impactTag ? 1 : 0;
+        const aEng = engagements[a.urlHash];
+        const bEng = engagements[b.urlHash];
+        const aScore = (aEng ? aEng.likes + aEng.shares : 0) + (a.impactTag ? 1 : 0);
+        const bScore = (bEng ? bEng.likes + bEng.shares : 0) + (b.impactTag ? 1 : 0);
         return bScore - aScore;
       });
       break;
+    }
     case 'relevant':
       if (topicFilter.length > 0) {
         sorted.sort((a, b) => {
@@ -46,11 +51,32 @@ function filterByCountry(
   country: string | null,
 ): ProcessedArticle[] {
   if (!country) return articles;
+  const lc = country.toLowerCase();
   return articles.filter(
-    (a) =>
-      !a.geoCountry ||
-      a.geoCountry.toLowerCase().includes(country.toLowerCase()),
+    (a) => a.geoCountry && a.geoCountry.toLowerCase().includes(lc),
   );
+}
+
+function filterByGeo(
+  articles: ProcessedArticle[],
+  filters: Pick<Filters, 'country' | 'indiaState' | 'indiaCity' | 'indiaDistrict'>,
+): ProcessedArticle[] {
+  let result = filterByCountry(articles, filters.country);
+
+  const regionTerms: string[] = [];
+  if (filters.indiaState) regionTerms.push(filters.indiaState.toLowerCase());
+  if (filters.indiaDistrict) regionTerms.push(filters.indiaDistrict.toLowerCase());
+  if (filters.indiaCity) regionTerms.push(filters.indiaCity.toLowerCase());
+
+  if (regionTerms.length > 0) {
+    result = result.filter((a) => {
+      if (!a.geoRegion) return false;
+      const region = a.geoRegion.toLowerCase();
+      return regionTerms.some((term) => region.includes(term));
+    });
+  }
+
+  return result;
 }
 
 function filterByTopics(
@@ -88,6 +114,7 @@ interface ArticlesState {
     dailyUsage: number,
     dailyCap: number,
     onUsageIncrement: () => void,
+    gnewsApiKey?: string,
   ) => Promise<void>;
 
   loadCachedArticles: (filters: Filters) => Promise<boolean>;
@@ -116,9 +143,9 @@ export const useArticlesStore = create<ArticlesState>()((set, get) => ({
         const positive = cached.filter(
           (a) => a.sentiment === 'positive' || a.sentiment === 'neutral',
         );
-        const filtered = filterByCountry(
+        const filtered = filterByGeo(
           filterByTopics(positive, filters.topics),
-          filters.country,
+          filters,
         );
         const sorted = sortArticles(filtered, filters.sortOrder, filters.topics);
         set({
@@ -127,7 +154,7 @@ export const useArticlesStore = create<ArticlesState>()((set, get) => ({
           cachedArticlesLoaded: true,
           lastFetchedAt: Date.now(),
         });
-        return true;
+        return filtered.length > 0;
       }
       return false;
     } catch {
@@ -141,9 +168,9 @@ export const useArticlesStore = create<ArticlesState>()((set, get) => ({
 
     set({ isFilterLoading: true });
 
-    const filtered = filterByCountry(
+    const filtered = filterByGeo(
       filterByTopics(allArticles, filters.topics),
-      filters.country,
+      filters,
     );
     const sorted = sortArticles(filtered, filters.sortOrder, filters.topics);
 
@@ -160,6 +187,7 @@ export const useArticlesStore = create<ArticlesState>()((set, get) => ({
     dailyUsage,
     dailyCap,
     onUsageIncrement,
+    gnewsApiKey,
   ) => {
     set({ isLoading: true, error: null });
 
@@ -170,7 +198,7 @@ export const useArticlesStore = create<ArticlesState>()((set, get) => ({
     };
 
     try {
-      const rawArticles = await fetchAllArticles(filters);
+      const rawArticles = await fetchAllArticles(filters, gnewsApiKey);
 
       const tier1Raw = rawArticles.filter((a) => TIER1_SOURCES.has(a.source));
       const tier2Raw = rawArticles.filter((a) => !TIER1_SOURCES.has(a.source));
@@ -186,9 +214,9 @@ export const useArticlesStore = create<ArticlesState>()((set, get) => ({
       if (tier1Processed.length > 0) {
         const { allArticles: existing } = get();
         const merged = dedupeArticles([...tier1Processed, ...existing]);
-        const filtered = filterByCountry(
+        const filtered = filterByGeo(
           filterByTopics(merged, filters.topics),
-          filters.country,
+          filters,
         );
         const sorted = sortArticles(filtered, filters.sortOrder, filters.topics);
         set({ articles: sorted, allArticles: merged });
@@ -204,9 +232,9 @@ export const useArticlesStore = create<ArticlesState>()((set, get) => ({
 
       const { allArticles: currentAll } = get();
       const all = dedupeArticles([...tier1Processed, ...tier2Processed, ...currentAll]);
-      const filtered = filterByCountry(
+      const filtered = filterByGeo(
         filterByTopics(all, filters.topics),
-        filters.country,
+        filters,
       );
       const sorted = sortArticles(filtered, filters.sortOrder, filters.topics);
 

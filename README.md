@@ -33,9 +33,11 @@ The user provides their own OpenAI API key (stored only in their browser's `sess
 | Decision | Reasoning |
 |---|---|
 | Bring Your Own API Key | Avoids storing user API keys server-side, removes the need for auth, and keeps the app free to run |
-| `sessionStorage` for the API key | Key is wiped when the tab closes — it never persists to disk or leaves the browser except to OpenAI |
+| `sessionStorage` for the OpenAI key | Key is wiped when the tab closes — it never persists to disk or leaves the browser except to OpenAI |
+| GNews key stored in settings | Moved from `.env` to the settings panel so the app works without any build-time config — users enter it once and it is persisted to `localStorage` |
 | Supabase as a shared cache | A single AI result can be reused by all users, dramatically reducing per-user API consumption |
 | Tiered source strategy | Tier 1 (RSS from trusted positive publishers) needs no sentiment check; Tier 2/3 needs full AI classification — this halves prompt costs |
+| Engagement tracked in localStorage | Like and share counts are stored locally and written to Supabase, powering the "popular" sort without a dedicated analytics backend |
 | Single-page, no auth | Lowest possible friction for a casual reader |
 
 ---
@@ -124,6 +126,34 @@ A reference design image (a clean editorial news platform called "Buletin") was 
 - **Single-page layout** — settings moved to a slide-over panel rather than a separate route, keeping the reader in context.
 - **App icon** — updated `favicon.svg` to match the reference icon style.
 
+### Step 8 — Engagement, article dialog, and API key management
+*Chat: [Engagement tracking, article dialog, GNews key in settings](7328a7f8-a566-4ce1-8b2b-a54eadffb70c)*
+
+A batch of product features driven by real usage feedback:
+
+- **Default thumbnail** — created `DefaultThumbnail.tsx`, a branded SVG placeholder with topic-specific icons that renders whenever an article has no image or the image fails to load. Cards always have a consistent visual shape.
+- **Article dialog** — clicking any card now opens `ArticleDialog.tsx`, a modal showing the full AI-generated summary, impact tag, source link, and share/like actions. The card itself no longer needs to expand in place.
+- **Engagement tracking** — a new `engagement.ts` Zustand store records likes and shares per article in `localStorage` and writes counts to Supabase. The "popular" sort in `articles.ts` now ranks articles by combined like + share count rather than arbitrary recency.
+- **Cross-page deduplication** — the home page `homeSections` computation now tracks a `usedInSections` set; multi-topic articles can only appear in one section, preventing the same story from showing up twice in a single scroll.
+- **GNews API key moved to settings** — the key was removed from `.env` and added to the settings panel alongside the OpenAI key, persisted to `localStorage`. This means the app works with zero `.env` configuration.
+- **Filter persistence** — saving filter preferences dispatches a `goodnews:filters-saved` custom browser event; `FeedPage` listens for this and triggers a re-fetch, making saved preferences apply immediately across all views.
+
+### Step 9 — Location filter correctness
+*Chat: [Fix location filter to show relevant articles](b84ce807-4b94-4c90-9db0-e1aae275bdc9)*
+
+After real testing, location filtering was found to be broken in three distinct ways. Cursor traced the bug through the full filter stack:
+
+- **`filterByCountry` was too permissive** — the condition `!a.geoCountry || ...` allowed every article with a null `geoCountry` to pass through any country filter, flooding the feed with untagged global content.
+- **India sub-region filters were never applied** — `applyFilters` called `filterByCountry` but silently ignored `indiaState`, `indiaCity`, and `indiaDistrict` even when they were set.
+- **No fallback for empty location results** — if the cache had no articles matching the selected location, the feed showed nothing without explanation.
+
+All three were fixed: `filterByCountry` was replaced by a stricter `filterByGeo` function that enforces country and India sub-region matching; `applyFilters`, `loadCachedArticles`, and `fetchArticles` were all updated to use it. The empty state now shows a location-aware message with a friendly gif and a button to fetch fresh articles when the cache has nothing for the selected location.
+
+### Step 10 — Featured card height consistency
+*Chat: [Fix featured article card height across pages](c42c4acc-d48d-4021-9df7-46238ca52903)*
+
+A small but noticeable visual inconsistency: the featured article card on the home page (all categories) was taller than featured cards in individual category views, because the card height was driven by content length rather than a fixed constraint. Cursor fixed `ArticleCard.tsx` by setting the featured grid container to a fixed `md:h-[300px]`, making the image fill that height, and adding `overflow-hidden` to the content area — giving every featured card an identical footprint regardless of headline or summary length.
+
 ---
 
 ## Technical Architecture
@@ -135,11 +165,15 @@ Browser
 │
 ├── src/components/
 │   ├── FeedPage.tsx              Home view / Category view, orchestrates article store
-│   ├── ArticleCard.tsx           Card UI, handles expand/collapse, share, Guardian re-fetch
+│   ├── ArticleCard.tsx           Card UI, thumbnail fallback, opens dialog on click
+│   ├── ArticleDialog.tsx         Modal: full summary, impact tag, source link, like/share
+│   ├── DefaultThumbnail.tsx      Branded SVG placeholder for articles with no image
 │   ├── FilterBar.tsx             Topic pills, sort, geo filter
-│   ├── SettingsPage.tsx          API key, neutral toggle, font size (slide-over panel)
+│   ├── SettingsPage.tsx          OpenAI + GNews API keys, neutral toggle, font size
 │   ├── WelcomeScreen.tsx         First-visit banner + API key prompt
-│   └── EmptyStates.tsx           No results / error / cap reached states
+│   └── EmptyStates.tsx           No results / error / location-aware empty states
+│   └── ui/
+│       ├── Dialog.tsx            Base modal primitive used by ArticleDialog
 │
 ├── src/lib/
 │   ├── fetchers/
@@ -158,9 +192,10 @@ Browser
 │   │   └── manager.ts            resolveArticles(): local → remote → AI waterfall
 │   │
 │   ├── stores/
-│   │   ├── articles.ts           Zustand: fetch, filter, sort, expand — single source of truth for feed
+│   │   ├── articles.ts           Zustand: fetch, filter, sort — single source of truth for feed
+│   │   ├── engagement.ts         Zustand persist (localStorage): like/share counts per article → powers popular sort
 │   │   ├── filters.ts            Zustand persist (localStorage): topics, sort, country, India geo
-│   │   └── settings.ts           Zustand persist (sessionStorage): API key, daily cap counter, font size
+│   │   └── settings.ts           Zustand persist (sessionStorage/localStorage): OpenAI + GNews keys, font size
 │   │
 │   ├── geo/
 │   │   ├── countries.ts          ISO country list
@@ -174,7 +209,7 @@ Browser
 ### Data flow
 
 ```
-fetchAllArticles()
+fetchAllArticles(gnewsApiKey)
   ├── fetchRssFeed()        → Tier 1 (The Better India, Positive News, Good News Network)
   ├── fetchGNews()          → Tier 2 (keyword-filtered via GNews.io)
   └── fetchGuardian()       → Tier 3 (section-filtered via Guardian API)
@@ -187,8 +222,17 @@ fetchAllArticles()
       └── 3. Call OpenAI            (miss → classify → write both caches)
               ↓
           Filter: sentiment === 'negative' → drop
+          Filter: filterByGeo() → enforce country + India sub-region
               ↓
           Zustand articles store → React components
+              ↓
+          Sort: latest / popular (by engagement score) / relevant
+              ↓
+          FeedPage: cross-section deduplication (usedInSections set)
+              ↓
+          ArticleCard → click → ArticleDialog
+                                  ├── like   → engagement.ts → Supabase
+                                  └── share  → Web Share API → WhatsApp
 ```
 
 ---
@@ -215,6 +259,12 @@ The app has zero server-side logic. This makes it trivially deployable (static h
 ### CORS proxy strategy
 In development, a Vite plugin intercepts `/api/rss-proxy?url=...` requests and forwards them server-side, bypassing CORS. In production, the app falls back to `allorigins.win`, a public CORS proxy. This is a known fragility point — `allorigins.win` is a third-party service with no SLA. A production hardening step would be to deploy a lightweight proxy on the same domain.
 
+### Engagement tracking without a backend
+Like and share counts are stored in `localStorage` and written to the Supabase `articles` table as metadata alongside the cached AI result. This means popularity signals are best-effort — a user who clears their browser storage loses their engagement history, and Supabase writes can fail silently. For a personal reading tool this is acceptable; for a public product it would need a dedicated events table with server-side aggregation.
+
+### Location filtering by AI-generated geo tags
+Geo-filtering relies entirely on `geoCountry` and `geoRegion` fields that `gpt-4o-mini` attaches during classification. Articles that were classified before geo-tagging was part of the prompt have `null` values and are excluded when a location filter is active. This means very old cache entries may disappear from filtered views — a deliberate trade-off that avoids showing irrelevant content, at the cost of apparent result count.
+
 ---
 
 ## Getting Started
@@ -229,12 +279,11 @@ In development, a Vite plugin intercepts `/api/rss-proxy?url=...` requests and f
 Copy `.env.example` to `.env` and fill in:
 
 ```
-VITE_GNEWS_API_KEY=       # GNews.io API key (free tier available)
 VITE_SUPABASE_URL=        # Supabase project URL (optional)
 VITE_SUPABASE_ANON_KEY=   # Supabase anon key (optional)
 ```
 
-The OpenAI API key is **not** an environment variable. Enter it in the app's Settings panel — it is stored only in your browser's `sessionStorage`.
+The **OpenAI API key** and **GNews API key** are not environment variables — enter them in the app's Settings panel. They are stored in your browser's `sessionStorage` / `localStorage` respectively and never sent anywhere except their own APIs.
 
 ### Supabase schema
 

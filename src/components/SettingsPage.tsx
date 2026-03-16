@@ -23,14 +23,23 @@ interface SettingsPanelProps {
 export function SettingsPanel({ open, onClose }: SettingsPanelProps) {
   const settings = useSettingsStore();
   const [showKey, setShowKey] = useState(false);
+  const [showGnewsKey, setShowGnewsKey] = useState(false);
   const [cacheSize, setCacheSize] = useState(countCachedEntries);
   const [apiKeyDraft, setApiKeyDraft] = useState(settings.openaiApiKey);
+  const [gnewsKeyDraft, setGnewsKeyDraft] = useState(settings.gnewsApiKey);
   const [keySaved, setKeySaved] = useState(false);
+  const [gnewsKeySaved, setGnewsKeySaved] = useState(false);
 
   const handleSaveKey = () => {
     settings.setApiKey(apiKeyDraft.trim());
     setKeySaved(true);
     setTimeout(() => setKeySaved(false), 2000);
+  };
+
+  const handleSaveGnewsKey = () => {
+    settings.setGnewsApiKey(gnewsKeyDraft.trim());
+    setGnewsKeySaved(true);
+    setTimeout(() => setGnewsKeySaved(false), 2000);
   };
 
   const handleClearCache = () => {
@@ -126,6 +135,57 @@ export function SettingsPanel({ open, onClose }: SettingsPanelProps) {
             <div className="flex items-start gap-2 text-xs text-neutral-500">
               <ShieldAlert className="mt-0.5 h-3.5 w-3.5 shrink-0 text-brand" />
               <p>Your key is stored locally in your browser and never sent to any server other than OpenAI.</p>
+            </div>
+          </section>
+
+          <section aria-labelledby="settings-gnews-heading">
+            <h3 id="settings-gnews-heading" className="mb-3 text-sm font-semibold text-neutral-900">
+              GNews API Key
+            </h3>
+            <div className="relative mb-3">
+              <Input
+                type={showGnewsKey ? 'text' : 'password'}
+                value={gnewsKeyDraft}
+                onChange={(e) => {
+                  setGnewsKeyDraft(e.target.value);
+                  setGnewsKeySaved(false);
+                }}
+                placeholder="Enter GNews API key..."
+                className="pr-10"
+                aria-label="GNews API key"
+                autoComplete="off"
+              />
+              <button
+                type="button"
+                onClick={() => setShowGnewsKey(!showGnewsKey)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-neutral-400 hover:text-neutral-600"
+                aria-label={showGnewsKey ? 'Hide API key' : 'Show API key'}
+              >
+                {showGnewsKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+              </button>
+            </div>
+            <Button
+              variant={gnewsKeySaved ? 'default' : 'outline'}
+              size="sm"
+              onClick={handleSaveGnewsKey}
+              disabled={!gnewsKeyDraft.trim()}
+              className={cn(
+                'mb-3 w-full transition-all',
+                gnewsKeySaved && 'bg-green-600 hover:bg-green-700',
+              )}
+            >
+              {gnewsKeySaved ? (
+                <>
+                  <Check className="mr-2 h-3.5 w-3.5" />
+                  GNews Key Saved!
+                </>
+              ) : (
+                'Save GNews Key'
+              )}
+            </Button>
+            <div className="flex items-start gap-2 text-xs text-neutral-500">
+              <ShieldAlert className="mt-0.5 h-3.5 w-3.5 shrink-0 text-brand" />
+              <p>Get your free API key from gnews.io. Stored locally in your browser.</p>
             </div>
           </section>
 
