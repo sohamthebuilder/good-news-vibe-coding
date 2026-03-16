@@ -14,6 +14,11 @@ GoodNews is a single-page web app that aggregates articles from multiple news so
 
 The user provides their own OpenAI API key (stored only in their browser's `sessionStorage`, never transmitted anywhere except directly to OpenAI). Everything else is handled automatically.
 
+<img width="3840" height="2960" alt="localhost_5173_ (1)" src="https://github.com/user-attachments/assets/80115369-517f-4818-8572-09f7d8a7343a" />
+
+<img width="1440" height="820" alt="Screenshot 2026-03-16 at 7 42 40 PM" src="https://github.com/user-attachments/assets/bdca62d8-8094-4164-9f99-d3ed520e523f" />
+
+
 ---
 
 ## Product Overview
@@ -67,7 +72,6 @@ With the plan attached, Cursor built the complete non-UI layer:
 - **Geo data** (`src/lib/geo/`) — full world country list plus India-specific states, cities, and districts.
 
 ### Step 3 — UI components and pages
-*Chat: [Build all UI components and pages](94bbe5c8-8e41-44f9-96e4-9f970745985c)*
 
 A separate prompt defined the design direction: *warm, editorial, calm — a quality Sunday magazine, not a breaking news ticker.* DM Sans for UI copy, Lora for article headlines, teal (`#1D9E75`) as the brand accent. Cursor built:
 
@@ -80,7 +84,6 @@ A separate prompt defined the design direction: *warm, editorial, calm — a qua
 Runtime errors that emerged from the first build were debugged and fixed in the same session.
 
 ### Step 4 — Wiring, settings reactivity, and quality pass
-*Chat: [Wire up routing, settings reactivity, full quality pass](c9956705-4f46-46b4-b41a-645f62562831)*
 
 With components in place, Cursor connected everything:
 
@@ -91,7 +94,6 @@ With components in place, Cursor connected everything:
 - **Accessibility pass** — ARIA labels on all interactive elements, keyboard navigation, screen-reader-friendly card expansion.
 
 ### Step 5 — User feedback and feature refinements
-*Chat: [User-reported fixes and feature improvements](abd504c2-6653-49a9-9219-1c810d3ccb0a)*
 
 After real usage, a batch of product-level fixes was submitted:
 
@@ -105,7 +107,6 @@ After real usage, a batch of product-level fixes was submitted:
 - **Module resolution fix** — corrected a broken import path in `cache/manager.ts` after a file rename.
 
 ### Step 6 — Debugging the news pipeline
-*Chat: [Debug: app not fetching news after API key set](e44095b5-6430-465f-a1ff-75fbe599032a)*
 
 A tricky runtime bug: the app silently showed no articles after the API key was entered. Cursor inspected terminal output, traced the error through the fetcher stack, and identified two root causes:
 
@@ -115,7 +116,6 @@ A tricky runtime bug: the app silently showed no articles after the API key was 
 Both were fixed, and temporary diagnostic logging was cleaned up afterwards.
 
 ### Step 7 — Design overhaul
-*Chat: [Redesign to match Buletin-style design system](f99deab7-35d0-411f-ac2b-9bbc00595ae7)*
 
 A reference design image (a clean editorial news platform called "Buletin") was attached and Cursor was asked to match it exactly. Changes:
 
@@ -127,7 +127,6 @@ A reference design image (a clean editorial news platform called "Buletin") was 
 - **App icon** — updated `favicon.svg` to match the reference icon style.
 
 ### Step 8 — Engagement, article dialog, and API key management
-*Chat: [Engagement tracking, article dialog, GNews key in settings](7328a7f8-a566-4ce1-8b2b-a54eadffb70c)*
 
 A batch of product features driven by real usage feedback:
 
@@ -139,7 +138,6 @@ A batch of product features driven by real usage feedback:
 - **Filter persistence** — saving filter preferences dispatches a `goodnews:filters-saved` custom browser event; `FeedPage` listens for this and triggers a re-fetch, making saved preferences apply immediately across all views.
 
 ### Step 9 — Location filter correctness
-*Chat: [Fix location filter to show relevant articles](b84ce807-4b94-4c90-9db0-e1aae275bdc9)*
 
 After real testing, location filtering was found to be broken in three distinct ways. Cursor traced the bug through the full filter stack:
 
@@ -150,7 +148,6 @@ After real testing, location filtering was found to be broken in three distinct 
 All three were fixed: `filterByCountry` was replaced by a stricter `filterByGeo` function that enforces country and India sub-region matching; `applyFilters`, `loadCachedArticles`, and `fetchArticles` were all updated to use it. The empty state now shows a location-aware message with a friendly gif and a button to fetch fresh articles when the cache has nothing for the selected location.
 
 ### Step 10 — Featured card height consistency
-*Chat: [Fix featured article card height across pages](c42c4acc-d48d-4021-9df7-46238ca52903)*
 
 A small but noticeable visual inconsistency: the featured article card on the home page (all categories) was taller than featured cards in individual category views, because the card height was driven by content length rather than a fixed constraint. Cursor fixed `ArticleCard.tsx` by setting the featured grid container to a fixed `md:h-[300px]`, making the image fill that height, and adding `overflow-hidden` to the content area — giving every featured card an identical footprint regardless of headline or summary length.
 
