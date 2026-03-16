@@ -25,6 +25,11 @@
     "tailwindcss-animate": "^1.0.7",
     "zustand": "^5.0.12"
   },
+  "overrides": {
+    "@tailwindcss/vite": {
+      "vite": "$vite"
+    }
+  },
   "devDependencies": {
     "@eslint/js": "^9.39.4",
     "@types/node": "^24.12.0",
