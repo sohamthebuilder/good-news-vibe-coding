@@ -52,12 +52,10 @@ The user provides their own OpenAI API key (stored only in their browser's `sess
 This app was built entirely inside [Cursor](https://cursor.sh) using AI-assisted development, step by step across multiple conversations.
 
 ### Step 1 — Problem definition and architecture planning
-*Chat: [Initial concept and full feature spec](938f6a6d-252d-4b7e-ab86-1c44a4ff14c5)*
 
 The session opened with a detailed product brief — problem statement, solution approach, and full feature scope — submitted as a prompt. Cursor's AI was asked to plan the entire codebase before writing a single line of code. The output was a comprehensive plan document covering every layer: project scaffold, TypeScript types, news fetchers, caching strategy, AI pipeline, state management, UI components, and sharing module. Todos were generated from the plan and used to track progress.
 
 ### Step 2 — Data and logic layer
-*Chat: [Initial concept and full feature spec](938f6a6d-252d-4b7e-ab86-1c44a4ff14c5)*
 
 With the plan attached, Cursor built the complete non-UI layer:
 
