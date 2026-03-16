@@ -1,4 +1,4 @@
-# GoodNews
+# Good News
 
 **A curated feed of only positive and uplifting news, powered by AI.**
 
