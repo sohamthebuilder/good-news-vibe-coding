@@ -145,10 +145,6 @@ After real testing, location filtering was found to be broken in three distinct 
 
 All three were fixed: `filterByCountry` was replaced by a stricter `filterByGeo` function that enforces country and India sub-region matching; `applyFilters`, `loadCachedArticles`, and `fetchArticles` were all updated to use it. The empty state now shows a location-aware message with a friendly gif and a button to fetch fresh articles when the cache has nothing for the selected location.
 
-### Step 10 — Featured card height consistency
-
-A small but noticeable visual inconsistency: the featured article card on the home page (all categories) was taller than featured cards in individual category views, because the card height was driven by content length rather than a fixed constraint. Cursor fixed `ArticleCard.tsx` by setting the featured grid container to a fixed `md:h-[300px]`, making the image fill that height, and adding `overflow-hidden` to the content area — giving every featured card an identical footprint regardless of headline or summary length.
-
 ---
 
 ## Technical Architecture
