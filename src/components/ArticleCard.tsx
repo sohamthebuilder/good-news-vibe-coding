@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Clock, Heart, Share2 } from 'lucide-react';
+import { Clock, Heart } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { Badge } from './ui/Badge';
 import { Skeleton } from './ui/Skeleton';
